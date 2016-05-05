@@ -1,0 +1,52 @@
+##Uploading all required packages 
+
+library(xgboost)
+library(readr)
+library(stringr)
+library(caret)
+library(car)
+
+# load data
+df_train = read_csv("Train.csv)
+df_test = read_csv("Test.csv")
+
+# Loading labels of train data
+##replace labels with target variable in Train dataset
+labels = df_train['labels']
+
+#Removing target variable from Train dataset
+df_train = df_train[-grep('labels', colnames(df_train))]
+
+# combine train and test data
+df_all = rbind(df_train,df_test)
+
+# one-hot-encoding categorical features
+ohe_feats = c('Loan_ID', 'Gender', 'Married','Education','Self_Employed','Property_Area')
+dummies <- dummyVars(~ Loan_ID + Gender + Married + Education + Self_Employed + Property_Area, data = df_all)
+df_all_ohe <- as.data.frame(predict(dummies, newdata = df_all))
+
+df_all_combined <- cbind(df_all[,-c(which(colnames(df_all) %in% ohe_feats))],df_all_ohe)
+
+df_all_combined <- df_all_combined[,c('id',features_selected)] 
+# split train and test
+X = df_all_combined[df_all_combined$id %in% df_train$id,]
+y <- recode(labels$labels,"'True'=1; 'False'=0)
+X_test = df_all_combined[df_all_combined$id %in% df_test$id,]
+
+
+xgb <- xgboost(data = data.matrix(X[,-1]), 
+ label = y, 
+ eta = 0.1,
+ max_depth = 15, 
+ nround=25, 
+ subsample = 0.5,
+ colsample_bytree = 0.5,
+ seed = 1,
+ eval_metric = "merror",
+ objective = "multi:softprob",
+ num_class = 12,
+ nthread = 3
+)
+
+# predict values in test set
+y_pred <- predict(xgb, data.matrix(X_test[,-1]))
